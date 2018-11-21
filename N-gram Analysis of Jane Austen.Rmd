@@ -1,0 +1,97 @@
+---
+title: "N-gram Analysis of Mulitple Works of Jame Austen"
+by: Nipunjeet Gujral
+---
+
+
+```{r library, echo=FALSE, message=FALSE, warning=FALSE}
+# source text
+library(janeaustenr)
+library(gutenbergr)
+
+# manipulate text
+library(tidyverse)
+library(tidytext)
+library(widyr)
+
+# display findings
+library(igraph)
+library(ggraph)
+library(ggthemes)
+```
+
+### Graphing the most often occurning posative and negative words preceded by \"not\""
+```{r words asociated with not, message=FALSE}
+AFINN <- get_sentiments("afinn")
+
+austen_books() %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>% 
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(word1 == "not") %>%
+  inner_join(AFINN, by = c(word2 = "word")) %>%
+  count(word2, score, sort = TRUE) %>%
+  ungroup() %>%
+  mutate(contribution = n * score) %>%
+  arrange(desc(abs(contribution))) %>%
+  head(20) %>%
+  mutate(word2 = reorder(word2, contribution)) %>%
+  ggplot(aes(word2, n * score, fill = n * score > 0)) +
+    geom_col(show.legend = FALSE) +
+    xlab("Words preceded by \"not\"") +
+    ylab("Sentiment score * number of occurrences") +
+    coord_flip()
+```
+
+
+### Subseting the works of Jane Ausen to just Pride & Prejudice
+```{r subsettingto pride and prejudice, message=FALSE}
+austen_section_words <- austen_books() %>%
+    filter(book == "Pride & Prejudice") %>%
+  mutate(section = row_number() %/% 10) %>%
+    filter(section > 0) %>%
+  unnest_tokens(word, text) %>%
+    filter(!word %in% stop_words$word)
+
+word_cors <- austen_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 20) %>%
+  pairwise_cor(word, section, sort = TRUE)
+```
+
+
+### Plotting frequecy of words most assoicated with:
+
+  >
+    * elizabeth
+    * pounds
+    * married
+    * pride
+
+```{r correlation between associated words, message=FALSE}
+word_cors %>%
+  filter(item1 %in% c("elizabeth", "pounds", "married", "pride")) %>%
+  group_by(item1) %>%
+  top_n(6) %>%
+  ungroup() %>%
+  mutate(item2 = reorder(item2, correlation)) %>%
+  ggplot(aes(item2, correlation)) +
+    geom_bar(stat = "identity") +
+    facet_wrap(~ item1, scales = "free") +
+    coord_flip()
+```
+
+
+### Forming a Nodes to Edges Graph Plotting 
+#### Plotting Bi-gram Correlations Against Relative Frequency  
+```{r wordnet assocation, message=FALSE}
+word_cors %>%
+  filter(correlation > .18) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "blue", size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_tufte()
+
+```
+

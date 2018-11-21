@@ -1,0 +1,73 @@
+---
+title: "Sentiment Analysis of Deathly Hallow"
+by: Nipunjeet Gujral
+---
+
+### Setup
+```{r library, message=FALSE, warning=FALSE}
+library(harrypotter)
+library(tidyverse)
+library(tidytext)
+
+titles <- c("Philosopher's Stone", "Chamber of Secrets","Prisoner of Azkaban", "Goblet of Fire", "Order of the Phoenix", "Half-Blood Prince", "Deathly Hallows")
+books <- list(philosophers_stone, chamber_of_secrets, prisoner_of_azkaban, goblet_of_fire, order_of_the_phoenix, half_blood_prince, deathly_hallows)
+series <- tibble()
+```
+
+
+### Seperating the Harry Potter Text into Descrete Books
+```{r seperating books, message=FALSE, warning=FALSE}
+for(i in length(titles)) {
+        
+        clean <- tibble(chapter = seq_along(books[[i]]),
+                text = books[[i]]) %>%
+             		unnest_tokens(word, text) %>%
+             		mutate(book = titles[i]) %>%
+             		select(book, everything())
+
+        series <- rbind(series, clean)
+}
+series$book <- factor(series$book, levels = rev(titles))
+
+```
+
+
+### Plotting the Story Arc of the Deathly Hallow Using the NRC, Bing, and AFINN libraries
+```{r plotting, message=FALSE, warning=FALSE}
+afinn <- series %>%
+        group_by(book) %>% 
+        mutate(word_count = 1:n(),
+               index = word_count %/% 500 + 1) %>% 
+        inner_join(get_sentiments("afinn")) %>%
+        group_by(book, index) %>%
+        summarise(sentiment = sum(score)) %>%
+        mutate(method = "AFINN")
+
+bing_and_nrc <- bind_rows(series %>%
+                  group_by(book) %>% 
+                  mutate(word_count = 1:n(),
+                         index = word_count %/% 500 + 1) %>% 
+                  inner_join(get_sentiments("bing")) %>%
+                  mutate(method = "Bing"),
+          series %>%
+                  group_by(book) %>% 
+                  mutate(word_count = 1:n(),
+                         index = word_count %/% 500 + 1) %>%
+                  inner_join(get_sentiments("nrc") %>%
+                                     filter(sentiment %in% c("positive", "negative"))) %>%
+                  mutate(method = "NRC")) %>%
+        count(book, method, index = index , sentiment) %>%
+        ungroup() %>%
+        spread(sentiment, n, fill = 0) %>%
+        mutate(sentiment = positive - negative) %>%
+        select(book, index, method, sentiment)
+
+bind_rows(afinn, 
+          bing_and_nrc) %>%
+        ungroup() %>%
+        mutate(book = factor(book, levels = titles)) %>%
+  ggplot(aes(index, sentiment, fill = method)) +
+  geom_bar(alpha = 0.8, stat = "identity", show.legend = FALSE) +
+  facet_grid(book ~ method)
+```
+

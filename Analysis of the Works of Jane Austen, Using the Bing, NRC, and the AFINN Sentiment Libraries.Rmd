@@ -1,0 +1,79 @@
+---
+title: "Analysis of the Works of Jane Austen, Using the Bing, NRC, and the AFINN Sentiment Libraries"
+by: Nipunjeet Gujral
+---
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(janeaustenr)
+library(tidytext)
+```
+
+### grouping all the works of jane austen by books (6)
+  > 
+   * Sense & Sensibility 
+   * Pride & Prejudice   
+   * Mansfield Park      
+   * Emma                
+   * Northanger Abbey    
+   * Persuasion
+
+#####segmenting each book by chapters
+
+#####unnesting the token words
+
+```{r message=FALSE, warning=FALSE}
+tidy_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", 
+                                                 ignore_case = TRUE)))) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
+```
+
+
+### Subsetting her works to just Pride and Prejudice
+```{r message=FALSE, warning=FALSE}
+pride_prejudice <- tidy_books %>% 
+  filter(book == "Pride & Prejudice")
+```
+
+### Appling the sentiment libraries to Pride and Prejudice
+
+
+Applying the afinn library to Pride and Prejudice
+```{r message=FALSE, warning=FALSE}
+afinn <- pride_prejudice %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  group_by(index = linenumber %/% 80) %>% 
+  summarise(sentiment = sum(score)) %>% 
+  mutate(method = "AFINN")
+```
+
+Apply both the Bing and NRC sentiment libraries to Pride and Predujice
+```{r message=FALSE, warning=FALSE}
+bing_and_nrc <- bind_rows(pride_prejudice %>% 
+                            inner_join(get_sentiments("bing")) %>%
+                            mutate(method = "Bing"),
+                          pride_prejudice %>% 
+                            inner_join(get_sentiments("nrc") %>% 
+                                         filter(sentiment %in% c("positive", 
+                                                                 "negative"))) %>%
+                            mutate(method = "NRC")) %>%
+  count(method, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+```
+
+### Plotting the different sentiment libraries 
+
+Combining the affin and bing_and_nrc dataframe
+```{r message=FALSE, warning=FALSE}
+bind_rows(afinn, bing_and_nrc) %>%
+  ggplot(aes(index, sentiment, fill = method)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~method, ncol = 1, scales = "free_y")
+```
+
+

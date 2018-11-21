@@ -1,0 +1,59 @@
+---
+title: 'Analysis of Pride and Predjudice by Jane Austen, Using the Bing Sentiment Library'
+by: Nipunjeet Gujral
+---
+
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(janeaustenr)
+library(tidytext)
+```
+
+
+### grouping all the works of jane austen by books (6)
+  > 
+   * Sense & Sensibility 
+   * Pride & Prejudice   
+   * Mansfield Park      
+   * Emma                
+   * Northanger Abbey    
+   * Persuasion
+
+#####segmenting each book by chapters
+
+#####unnesting the token words
+```{r message=FALSE, warning=FALSE}
+tidy_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", 
+                                                 ignore_case = TRUE)))) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
+```
+
+
+### apply thing the 'bing' sentiment libary to her all 6 books
+
+split each book by sentence
+
+count the posative and sentiment word per sentence
+
+sentiment = frequency of posative setement - frequency of negative setement  
+```{r message=FALSE, warning=FALSE}
+total_bing_sentiment <- tidy_books %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+```
+
+
+### graphing the sentiment of the sentences of text 
+```{r}
+ggplot(total_bing_sentiment, aes(index, sentiment, fill = book), xlab = "line numbers") +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+```
+
